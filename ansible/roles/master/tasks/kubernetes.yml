@@ -1,0 +1,57 @@
+---
+- name: Disable SELinux
+  selinux:
+    state: permissive
+
+- name: Disable swap
+  command: swapoff -a
+  ignore_errors: yes
+
+- name: Remove swap from /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^\s*\S+\s+none\s+swap\s+'
+    line: "# Commented out by Ansible"
+    state: absent
+
+- name: Add Kubernetes repository
+  yum_repository:
+    name: kubernetes
+    description: Kubernetes
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    gpgcheck: 1
+    repo_gpgcheck: 1
+    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+    exclude: kubelet kubeadm kubectl
+
+- name: Install Docker and Kubernetes tools
+  yum:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - kubelet-1.20.0
+      - kubeadm-1.20.0
+      - kubectl-1.20.0
+    state: present
+  notify:
+    - start and enable docker
+    - reload systemd
+    - start and enable kubelet
+
+handlers:
+  - name: start and enable docker
+    service:
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: reload systemd
+    systemd:
+      daemon_reload: yes
+
+  - name: start and enable kubelet
+    service:
+      name: kubelet
+      state: started
+      enabled: yes

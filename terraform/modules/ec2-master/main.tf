@@ -83,4 +83,22 @@ resource "aws_instance" "k8s_node" {
 
 
 
+resource "null_resource" "master_node_setup" {
+  depends_on = [
+    aws_instance.k8s_node # Assuming this is your master node
+  ]
 
+  triggers = {
+    always_run = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+echo "[master]" > ../ansible/hosts.ini
+echo "${aws_instance.k8s_node.public_ip}" >> ../ansible/hosts.ini
+
+# Run Ansible playbook or tasks specifically for the master node setup
+ansible-playbook -i ../ansible/hosts.ini ../ansible/path/to/master-setup-playbook.yml --private-key /path/to/your/private/key
+EOT
+  }
+}

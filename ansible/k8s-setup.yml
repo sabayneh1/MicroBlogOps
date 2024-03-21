@@ -1,0 +1,31 @@
+- hosts: all
+  become: true
+  tasks:
+  - name: Update all packages
+    yum:
+      name: '*'
+      state: latest
+
+  - name: Install Docker
+    yum:
+      name: docker
+      state: present
+    notify:
+    - start docker
+
+  handlers:
+  - name: start docker
+    service:
+      name: docker
+      state: started
+      enabled: yes
+
+- hosts: master
+  become: true
+  roles:
+  - master
+
+- hosts: workers
+  become: true
+  roles:
+  - worker

@@ -83,3 +83,27 @@ resource "aws_instance" "k8s_worker_node" {
     "Name" = "k8s-worker-${count.index}"
   }
 }
+
+
+resource "null_resource" "update_ansible_inventory_and_run_playbook" {
+  depends_on = [
+    aws_instance.k8s_worker_node,
+    aws_instance.k8s_node # Assuming this is your master node
+  ]
+
+  triggers = {
+    always_run = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+echo "[master]" > ../ansible/hosts.ini
+echo "${aws_instance.k8s_node.public_ip}" >> ../ansible/hosts.ini
+echo "[workers]" >> ../ansible/hosts.ini
+%{ for ip in aws_instance.k8s_worker_node.*.public_ip ~}
+echo "${ip}" >> ../ansible/hosts.ini
+%{ endfor ~}
+ansible-playbook -i ../ansible/hosts.ini ../ansible/k8s-setup.yml --private-key /path/to/your/private/key
+EOT
+  }
+}

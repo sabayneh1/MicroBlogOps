@@ -1,0 +1,7 @@
+- name: Install Kubernetes tools
+  include_tasks: kubernetes.yml
+
+- name: Join the cluster
+  command: "{{ hostvars['master-node']['kubeadm_init_output'].stdout_lines | select('match', '^kubeadm join.*$') | first }}"
+  environment:
+    KUBECONFIG: "/etc/kubernetes/admin.conf"
