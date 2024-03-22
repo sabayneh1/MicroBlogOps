@@ -36,63 +36,65 @@ module "worker_nodes" {
   subnet_id             = module.vpc.public_subnet_ids[0]
   security_group_ids    = [module.vpc.worker_security_group_id]
   key_name              = "pro1"
-  instance_count        = 2 
+  instance_count        = 2
   tags                  = { Name = "k8s-worker" }
   iam_instance_profile_name = "micro-blog-ec2-profile-${local.unique_suffix}-worker"
   private_subnet_ids       = module.vpc.private_subnet_ids
 }
 
 
+resource "local_file" "ansible_inventory" {
+  content = templatefile("${path.module}/hosts.tpl", {
+    master_ips       = [module.master_node.master_node_ip], # Ensure this is a list
+    worker_ips       = module.worker_nodes.worker_node_ips, # No change here, it's already a list
+    private_key_path = "${path.module}/pro1.pem"
+  })
+  filename = "${path.module}/../ansible/hosts.ini"
+}
+
+resource "null_resource" "configure_k8s" {
+  // Explicitly declare dependencies on infrastructure resources
+  depends_on = [
+    local_file.ansible_inventory,
+    module.master_node,
+    module.worker_nodes,
+    module.vpc,
+    // Include here any other resources or modules your Ansible configuration depends on.
+    // For example, if you have a module for your VPC or NAT Gateway, include them as well:
+
+    // module.nat_gateway,
+  ]
+
+  provisioner "local-exec" {
+    command = "ansible-playbook -i ${path.module}/../ansible/hosts.ini ${path.module}/../ansible/k8s-setup.yml --private-key ${path.module}/pro1.pem"
+    environment = {
+      ANSIBLE_HOST_KEY_CHECKING = "False"
+    }
+  }
+}
 
 
 
+# # Removed: data "template_file" "ansible_hosts"
+# # This data source is replaced by the use of the templatefile function directly in the local_file resource.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# module "linux" {
-#   source = "./modules/linux"
-#   #   version                = "~> 2.0"
-
-#   instance_count = 2
-
-#   ami           = "ami-0fb99f22ad0184043"
-#   instance_type = "t2.micro"
-#   #   key_name               = "user1"
-#   #   monitoring             = true
-#   #   vpc_security_group_ids = ["sg-12345678"]
-#   #   subnet_id              = "subnet-eddcdzz4"
-
-#   tags = {
-#     Terraform   = "true"
-#     Environment = "dev"
-#   }
+# resource "local_file" "ansible_inventory" {
+#   # Updated to use templatefile function directly for content generation
+#   content = templatefile("${path.module}/hosts.tpl", {
+#     master_ips       = module.master_node.master_node_ip, # Assuming this outputs a single IP
+#     worker_ips       = module.worker_nodes.worker_node_ips, # Directly pass the list without joining it into a string
+#     private_key_path = "${path.module}/pro1.pem"
+#   })
+#   filename = "${path.module}/../ansible/hosts.ini"
 # }
 
+# resource "null_resource" "configure_k8s" {
+#   depends_on = [local_file.ansible_inventory]
 
-# module "linux" {
-#   source = "./modules/linux"
-
-#   linux_instances = {
-#     linux-ubuntu-vm  = { instance_type = "t2.micro", ami = "ami-0fb99f22ad0184043" }
-#     linux-ubuntu-vm1 = { instance_type = "t2.micro", ami = "ami-0fb99f22ad0184043" }
+#   provisioner "local-exec" {
+#     command = "ansible-playbook -i ${path.module}/../ansible/hosts.ini ${path.module}/../ansible/k8s-setup.yml --private-key ${path.module}/pro1.pem"
+#     environment = {
+#       ANSIBLE_HOST_KEY_CHECKING = "False"
+#     }
 #   }
 # }
-
-

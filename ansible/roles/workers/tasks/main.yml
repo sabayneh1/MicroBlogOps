@@ -1,7 +1,17 @@
 - name: Install Kubernetes tools
   include_tasks: kubernetes.yml
 
+- name: Copy systemd service file for containerd
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/templates/containerd.service.j2"
+    dest: /etc/systemd/system/containerd.service
+  notify:
+    - Reload systemd
+    - Restart containerd
+  become: true
+
 - name: Join the cluster
-  command: "{{ hostvars['master-node']['kubeadm_init_output'].stdout_lines | select('match', '^kubeadm join.*$') | first }}"
+  command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
   environment:
     KUBECONFIG: "/etc/kubernetes/admin.conf"
+  when: "'kubeadm_join_command' in hostvars[groups['master'][0]]"

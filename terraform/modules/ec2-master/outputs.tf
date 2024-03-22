@@ -25,4 +25,7 @@ output "master_node_iam_instance_profile_name" {
   value = aws_iam_instance_profile.ec2_profile.name
 }
 
+output "master_node_ip" {
+  value = aws_instance.k8s_node[0].public_ip
+}
 

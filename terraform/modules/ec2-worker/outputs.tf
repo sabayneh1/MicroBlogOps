@@ -25,3 +25,6 @@ output "ec2_count" {
 output "worker_node_iam_instance_profile_name" {
   value = aws_iam_instance_profile.ec2_profile_worker.name
 }
+output "worker_node_ips" {
+  value = aws_instance.k8s_worker_node.*.private_ip
+}

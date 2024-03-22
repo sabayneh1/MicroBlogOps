@@ -77,28 +77,43 @@ resource "aws_instance" "k8s_node" {
   iam_instance_profile        = var.iam_instance_profile_name
   associate_public_ip_address = true
   tags                        = var.tags
+
+ provisioner "file" {
+  source      = "${path.module}/../../pro1.pem"
+  destination = "/home/ubuntu/pro1.pem"
+
+  connection {
+    type        = "ssh"
+    user        = "ubuntu" # Adjusted to 'ubuntu' as your Ansible user is 'ubuntu'
+    private_key = file("${path.module}/../../pro1.pem")
+    host        = self.public_ip
+  }
+}
+
+
+
 }
 
 
 
 
 
-resource "null_resource" "master_node_setup" {
-  depends_on = [
-    aws_instance.k8s_node # Assuming this is your master node
-  ]
+# resource "null_resource" "master_node_setup" {
+#   depends_on = [
+#     aws_instance.k8s_node # Assuming this is your master node
+#   ]
 
-  triggers = {
-    always_run = timestamp()
-  }
+#   triggers = {
+#     always_run = timestamp()
+#   }
 
-  provisioner "local-exec" {
-    command = <<EOT
-echo "[master]" > ../ansible/hosts.ini
-echo "${aws_instance.k8s_node.public_ip}" >> ../ansible/hosts.ini
+#   provisioner "local-exec" {
+#     command = <<EOT
+# echo "[master]" > ../ansible/hosts.ini
+# echo "${aws_instance.k8s_node.public_ip}" >> ../ansible/hosts.ini
 
-# Run Ansible playbook or tasks specifically for the master node setup
-ansible-playbook -i ../ansible/hosts.ini ../ansible/path/to/master-setup-playbook.yml --private-key /path/to/your/private/key
-EOT
-  }
-}
+# # Run Ansible playbook or tasks specifically for the master node setup
+# ansible-playbook -i ../ansible/hosts.ini ../ansible/path/to/master-setup-playbook.yml --private-key /path/to/your/private/key
+# EOT
+#   }
+# }

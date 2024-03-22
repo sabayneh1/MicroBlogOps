@@ -1,57 +1,303 @@
----
-- name: Disable SELinux
-  selinux:
-    state: permissive
+- hosts: all
+  become: true
+  tasks:
+    - name: Gather the facts
+      ansible.builtin.setup:
 
-- name: Disable swap
-  command: swapoff -a
-  ignore_errors: yes
+    - name: Disable swap
+      command: swapoff -a
+      ignore_errors: yes
 
-- name: Remove swap from /etc/fstab
-  lineinfile:
-    path: /etc/fstab
-    regexp: '^\s*\S+\s+none\s+swap\s+'
-    line: "# Commented out by Ansible"
-    state: absent
+    - name: Remove swap from /etc/fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: '^\s*\S+\s+none\s+swap\s+'
+        line: "# Commented out by Ansible"
+        state: absent
 
-- name: Add Kubernetes repository
-  yum_repository:
-    name: kubernetes
-    description: Kubernetes
-    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
-    gpgcheck: 1
-    repo_gpgcheck: 1
-    gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-    exclude: kubelet kubeadm kubectl
 
-- name: Install Docker and Kubernetes tools
-  yum:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - kubelet-1.20.0
-      - kubeadm-1.20.0
-      - kubectl-1.20.0
-    state: present
-  notify:
-    - start and enable docker
-    - reload systemd
-    - start and enable kubelet
+    - name: Ensure no conflicting Docker packages are installed
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - docker
+        - docker-engine
+        - docker.io
+        - containerd
+        - runc
 
-handlers:
-  - name: start and enable docker
-    service:
-      name: docker
-      state: started
-      enabled: yes
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
 
-  - name: reload systemd
-    systemd:
-      daemon_reload: yes
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
 
-  - name: start and enable kubelet
-    service:
-      name: kubelet
-      state: started
-      enabled: yes
+    - name: Force update of APT package cache after adding Docker repo
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 0
+
+    - name: Create the directory for Kubernetes GPG key if it does not exist
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Kubernetes GPG key
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
+        state: present
+        update_cache: yes
+
+    - name: Update and upgrade all packages
+      ansible.builtin.apt:
+        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Download and install containerd 1.7.14
+      block:
+        - name: Download containerd package
+          ansible.builtin.get_url:
+            url: "https://github.com/containerd/containerd/releases/download/v1.7.14/containerd-1.7.14-linux-amd64.tar.gz"
+            dest: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+            mode: '0644'
+
+        - name: Create containerd directory
+          ansible.builtin.file:
+            path: "/usr/local/bin"
+            state: directory
+            mode: '0755'
+
+        - name: Extract containerd package
+          ansible.builtin.unarchive:
+            src: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+            dest: "/usr/local/bin"
+            remote_src: yes
+            extra_opts: [--strip-components=1]
+
+        - name: Remove the downloaded tarball
+          ansible.builtin.file:
+            path: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+            state: absent
+
+    - name: Install Docker and Kubernetes tools
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+
+    - name: Restart containerd to apply configurations
+      ansible.builtin.service:
+        name: containerd
+        state: restarted
+        enabled: yes
+
+    - name: Check containerd configuration for Kubernetes compatibility
+      ansible.builtin.shell:
+        cmd: cat /etc/containerd/config.toml | grep -A2 "[plugins.\"io.containerd.grpc.v1.cri\"]"
+      register: cri_config
+      failed_when: "'containerd.runtimes.runc.options.SystemdCgroup = true' not in cri_config.stdout"
+      ignore_errors: true
+
+    - name: Hold Kubernetes packages
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: Start and enable Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Enable kubelet service
+      ansible.builtin.service:
+        name: kubelet
+        state: started
+        enabled: yes
+
+    - name: Reboot if required
+      ansible.builtin.reboot:
+        msg: "Rebooting because of significant system changes"
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 60
+        test_command: uptime
+      when: ansible_facts['distribution'] == "Ubuntu" and ansible_facts['distribution_version'] is version_compare('18.04', '>=')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# - name: Gather the facts
+#   ansible.builtin.setup:
+
+# - name: Disable swap
+#   command: swapoff -a
+#   ignore_errors: yes
+
+# - name: Remove swap from /etc/fstab
+#   lineinfile:
+#     path: /etc/fstab
+#     regexp: '^\s*\S+\s+none\s+swap\s+'
+#     line: "# Commented out by Ansible"
+#     state: absent
+
+# - name: Ensure no conflicting Docker packages are installed
+#   ansible.builtin.package:
+#     name: "{{ item }}"
+#     state: absent
+#   loop:
+#     - docker
+#     - docker-engine
+#     - docker.io
+#     - containerd
+#     - runc
+
+# - name: Add Docker GPG key
+#   ansible.builtin.apt_key:
+#     url: https://download.docker.com/linux/ubuntu/gpg
+#     state: present
+
+# - name: Add Docker repository
+#   ansible.builtin.apt_repository:
+#     repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+#     state: present
+#     update_cache: yes
+
+# - name: Force update of APT package cache after adding Docker repo
+#   ansible.builtin.apt:
+#     update_cache: yes
+#     cache_valid_time: 0
+
+# - name: Create the directory for Kubernetes GPG key if it does not exist
+#   ansible.builtin.file:
+#     path: /etc/apt/keyrings
+#     state: directory
+#     mode: '0755'
+
+# - name: Add Kubernetes GPG key
+#   ansible.builtin.shell:
+#     cmd: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+#   args:
+#     creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+# - name: Add Kubernetes repository
+#   ansible.builtin.apt_repository:
+#     repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
+#     state: present
+#     update_cache: yes
+
+# - name: Update and upgrade all packages
+#   ansible.builtin.apt:
+#     upgrade: yes
+#     update_cache: yes
+#     cache_valid_time: 3600
+
+# - name: Install Docker and Kubernetes tools
+#   ansible.builtin.apt:
+#     update_cache: yes
+#     name:
+#       - docker-ce
+#       - docker-ce-cli
+#       - containerd.io
+#       - kubelet
+#       - kubeadm
+#       - kubectl
+#     state: present
+#     force_apt_get: yes
+
+# - name: Restart containerd to apply configurations
+#   ansible.builtin.service:
+#     name: containerd
+#     state: restarted
+#     enabled: yes
+
+# - name: Check containerd configuration for Kubernetes compatibility
+#   ansible.builtin.shell:
+#     cmd: cat /etc/containerd/config.toml | grep -A2 "[plugins.\"io.containerd.grpc.v1.cri\"]"
+#   register: cri_config
+#   failed_when: "'containerd.runtimes.runc.options.SystemdCgroup = true' not in cri_config.stdout"
+#   ignore_errors: true
+
+# - name: Hold Kubernetes packages
+#   ansible.builtin.dpkg_selections:
+#     name: "{{ item }}"
+#     selection: hold
+#   loop:
+#     - kubelet
+#     - kubeadm
+#     - kubectl
+
+# - name: Start and enable Docker
+#   ansible.builtin.service:
+#     name: docker
+#     state: started
+#     enabled: yes
+
+# - name: Enable kubelet service
+#   ansible.builtin.service:
+#     name: kubelet
+#     state: started
+#     enabled: yes
+
+# - name: Reboot if required
+#   ansible.builtin.reboot:
+#     msg: "Rebooting because of significant system changes"
+#     connect_timeout: 5
+#     reboot_timeout: 300
+#     pre_reboot_delay: 0
+#     post_reboot_delay: 60
+#     test_command: uptime
+#   when: ansible_facts['distribution'] == "Ubuntu" and ansible_facts['distribution_version'] is version('18.04', '>=')
