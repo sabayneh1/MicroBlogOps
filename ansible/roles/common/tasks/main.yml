@@ -97,6 +97,23 @@
         remote_src: yes
         extra_opts: [--strip-components=1]
 
+    # common/tasks/main.yml or common/tasks/configure_containerd.yml
+
+    - name: Check if containerd config.toml exists
+      ansible.builtin.stat:
+        path: /etc/containerd/config.toml
+      register: config_toml_stat
+
+    - name: Ensure containerd uses systemd cgroup driver
+      ansible.builtin.lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^SystemdCgroup = false'
+        line: 'SystemdCgroup = true'
+      when: config_toml_stat.stat.exists
+      notify: Restart containerd
+
+
+
 - name: Remove the downloaded tarball
   ansible.builtin.file:
     path: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"

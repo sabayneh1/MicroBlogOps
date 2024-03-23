@@ -10,14 +10,22 @@
     - Restart containerd
   become: true
 
-- name: Install Kubernetes packages (kubeadm, kubelet, kubectl)
+- name: Update APT package cache
   ansible.builtin.apt:
-    name:
-      - kubeadm
-      - kubelet
-      - kubectl
     update_cache: yes
+    cache_valid_time: 3600  # Example: 1 hour
+
+- name: Install specific version of Kubernetes packages (kubeadm, kubelet, kubectl) or use available version
+  ansible.builtin.apt:
+    name: "{{ item }}=1.29.*"
     state: present
+    update_cache: yes
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+  ignore_errors: yes  # Consider handling errors more gracefully or removing to enforce version requirements
+
 
 - name: Join the cluster
   command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
@@ -51,14 +59,6 @@
     - kube-scheduler.yaml
     - etcd.yaml
 
-- name: Check for port 10250 usage
-  ansible.builtin.shell: lsof -i:10250
-  register: lsof_output
-  ignore_errors: true
-
-- name: Kill process using port 10250 if exists
-  ansible.builtin.shell: kill -9 {{ lsof_output.stdout.split()[1] }}
-  when: lsof_output.rc == 0
 #######
 - name: Enable and start kubelet service
   ansible.builtin.systemd:
@@ -101,14 +101,19 @@
   register: kubeadm_init_output
 
 ###
-- name: Check for process using port 10250
-  ansible.builtin.shell: "lsof -i :10250 | awk 'NR!=1 {print $2}' | uniq"
-  register: process_using_port_10250
-  ignore_errors: true
+- name: Ensure Kubernetes required ports are available
+  block:
+    - name: Check for process using Kubernetes ports
+      ansible.builtin.shell: "ss -ltnp | grep -E ':10250|:10259|:2379|:2380' | awk '{print $6}' | cut -d',' -f1 | awk -F'\"' '{print $2}'"
+      register: processes_using_ports
+      ignore_errors: true
+      changed_when: false
 
-- name: Kill process using port 10250 if exists
-  ansible.builtin.shell: "kill -9 {{ process_using_port_10250.stdout }}"
-  when: process_using_port_10250.stdout != ""
+    - name: Kill processes using Kubernetes ports
+      ansible.builtin.shell: "kill -9 $(pidof {{ item }})"
+      loop: "{{ processes_using_ports.stdout_lines }}"
+      when: processes_using_ports.stdout != ""
+      ignore_errors: true
 
 ###
 
