@@ -1,21 +1,23 @@
----
-# Setup common tasks across all nodes
 - hosts: all
   become: true
   roles:
     - common
 
-# Setup the master node
 - hosts: master
   become: true
   roles:
     - master
+  tasks:
+    - include_tasks: roles/master/tasks/kubernetes.yml
 
-# Setup worker nodes
 - hosts: workers
   become: true
   roles:
-    - worker
+    - workers
+  tasks:
+    - include_tasks: roles/workers/tasks/kubernetes.yml
+
+
 
   tasks:
     - name: Update all packages

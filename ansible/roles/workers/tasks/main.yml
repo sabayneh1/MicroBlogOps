@@ -1,13 +1,15 @@
-- name: Install Kubernetes tools
-  include_tasks: kubernetes.yml
+- name: Include common setup tasks
+  include_tasks: "roles/common/tasks/main.yml"
 
 - name: Copy systemd service file for containerd
   ansible.builtin.template:
-    src: "{{ playbook_dir }}/templates/containerd.service.j2"
+    src: "roles/common/templates/containerd.service.j2"
     dest: /etc/systemd/system/containerd.service
+
   notify:
     - Reload systemd
     - Restart containerd
+
   become: true
 
 - name: Join the cluster

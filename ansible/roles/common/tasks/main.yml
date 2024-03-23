@@ -1,0 +1,90 @@
+- name: Gather the facts
+  ansible.builtin.setup:
+
+- name: Disable swap
+  command: swapoff -a
+  ignore_errors: yes
+
+- name: Remove swap from /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^\s*\S+\s+none\s+swap\s+'
+    line: "# Commented out by Ansible"
+    state: absent
+
+- name: Ensure no conflicting Docker packages are installed
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - docker
+    - docker-engine
+    - docker.io
+    - containerd
+    - runc
+
+- name: Add Docker GPG key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    update_cache: yes
+
+- name: Force update of APT package cache after adding Docker repo
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 0
+
+- name: Create the directory for Kubernetes GPG key if it does not exist
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Kubernetes GPG key
+  ansible.builtin.shell:
+    cmd: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+- name: Add Kubernetes repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
+    state: present
+    update_cache: yes
+
+- name: Update and upgrade all packages
+  ansible.builtin.apt:
+    upgrade: yes
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Download and install containerd 1.7.14
+  block:
+    - name: Download containerd package
+      ansible.builtin.get_url:
+        url: "https://github.com/containerd/containerd/releases/download/v1.7.14/containerd-1.7.14-linux-amd64.tar.gz"
+        dest: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+        mode: '0644'
+
+    - name: Create containerd directory
+      ansible.builtin.file:
+        path: "/usr/local/bin"
+        state: directory
+        mode: '0755'
+
+    - name: Extract containerd package
+      ansible.builtin.unarchive:
+        src: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+        dest: "/usr/local/bin"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+
+    - name: Remove the downloaded tarball
+      ansible.builtin.file:
+        path: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+        state: absent
