@@ -5,12 +5,11 @@
   ansible.builtin.template:
     src: "roles/common/templates/containerd.service.j2"
     dest: /etc/systemd/system/containerd.service
-
   notify:
     - Reload systemd
     - Restart containerd
   become: true
-  
+
 - name: Install Kubernetes packages (kubeadm, kubelet, kubectl)
   ansible.builtin.apt:
     name:
@@ -20,36 +19,11 @@
     update_cache: yes
     state: present
 
-- name: Initialize the Kubernetes cluster
-  command: kubeadm init --pod-network-cidr=192.168.0.0/16
-  register: kubeadm_init_output
-
-- name: Save kubeadm init output as a fact
-  ansible.builtin.set_fact:
-    kubeadm_join_command: "{{ kubeadm_init_output.stdout_lines | select('match', '^kubeadm join.*$') | first }}"
-
-- name: Create .kube directory
-  file:
-    path: "/home/ubuntu/.kube"
-    state: directory
-    owner: ubuntu
-    group: ubuntu
-    mode: '0755'
-
-- name: Copy admin.conf to user's kube config
-  copy:
-    src: "/etc/kubernetes/admin.conf"
-    dest: "/home/ubuntu/.kube/config"
-    remote_src: yes
-    owner: ubuntu
-    group: ubuntu
-    mode: '0644'
-
-- name: Apply Calico network plugin
-  command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+- name: Join the cluster
+  command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
   environment:
     KUBECONFIG: "/etc/kubernetes/admin.conf"
-
+  when: "'kubeadm_join_command' in hostvars[groups['master'][0]]"
 
 - name: Ensure Kubernetes packages are installed
   apt:
@@ -59,6 +33,38 @@
       - kubectl
     state: present
     update_cache: yes
+
+######
+- name: Stop kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    state: stopped
+    enabled: no
+
+- name: Remove existing Kubernetes manifests
+  ansible.builtin.file:
+    path: "/etc/kubernetes/manifests/{{ item }}"
+    state: absent
+  loop:
+    - kube-apiserver.yaml
+    - kube-controller-manager.yaml
+    - kube-scheduler.yaml
+    - etcd.yaml
+
+- name: Check for port 10250 usage
+  ansible.builtin.shell: lsof -i:10250
+  register: lsof_output
+  ignore_errors: true
+
+- name: Kill process using port 10250 if exists
+  ansible.builtin.shell: kill -9 {{ lsof_output.stdout.split()[1] }}
+  when: lsof_output.rc == 0
+#######
+- name: Enable and start kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: yes
+    state: started
 
 - name: Check kubeadm installation
   command: which kubeadm
@@ -89,3 +95,49 @@
   debug:
     msg: "kubectl installed at: {{ kubectl_check.stdout }}"
   when: kubectl_check.rc == 0
+
+- name: Initialize the Kubernetes cluster
+  command: kubeadm init --pod-network-cidr=192.168.0.0/16
+  register: kubeadm_init_output
+
+###
+- name: Check for process using port 10250
+  ansible.builtin.shell: "lsof -i :10250 | awk 'NR!=1 {print $2}' | uniq"
+  register: process_using_port_10250
+  ignore_errors: true
+
+- name: Kill process using port 10250 if exists
+  ansible.builtin.shell: "kill -9 {{ process_using_port_10250.stdout }}"
+  when: process_using_port_10250.stdout != ""
+
+###
+
+- name: Save kubeadm init output as a fact
+  ansible.builtin.set_fact:
+    kubeadm_join_command: "{{ kubeadm_init_output.stdout_lines | select('match', '^kubeadm join.*$') | first }}"
+
+- name: Create .kube directory
+  file:
+    path: "/home/ubuntu/.kube"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy admin.conf to user's kube config
+  copy:
+    src: "/etc/kubernetes/admin.conf"
+    dest: "/home/ubuntu/.kube/config"
+    remote_src: yes
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Apply Calico network plugin
+  command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+  environment:
+    KUBECONFIG: "/etc/kubernetes/admin.conf"
+  register: result
+  until: result.rc == 0
+  retries: 5
+  delay: 30

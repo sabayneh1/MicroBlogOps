@@ -20,8 +20,21 @@
     - docker
     - docker-engine
     - docker.io
-    - containerd
+    # - containerd
     - runc
+
+- name: Install containerd
+  become: yes
+  apt:
+    name: containerd
+    state: present
+    update_cache: yes
+
+- name: Enable and start containerd
+  ansible.builtin.service:
+    name: containerd
+    state: started
+    enabled: yes
 
 - name: Add Docker GPG key
   ansible.builtin.apt_key:
@@ -84,7 +97,37 @@
         remote_src: yes
         extra_opts: [--strip-components=1]
 
-    - name: Remove the downloaded tarball
-      ansible.builtin.file:
-        path: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
-        state: absent
+- name: Remove the downloaded tarball
+  ansible.builtin.file:
+    path: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+    state: absent
+
+- name: Load br_netfilter module
+  ansible.builtin.modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Verify container runtime (containerd) is active and running
+  ansible.builtin.systemd:
+    name: containerd
+    state: started
+    enabled: yes
+
+- name: Load necessary kernel modules
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Apply required sysctl settings for Kubernetes
+  ansible.builtin.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
