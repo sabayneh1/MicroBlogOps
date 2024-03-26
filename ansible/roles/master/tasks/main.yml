@@ -5,17 +5,17 @@
   ansible.builtin.template:
     src: "roles/common/templates/containerd.service.j2"
     dest: /etc/systemd/system/containerd.service
-  notify:
-    - Reload systemd
-    - Restart containerd
+    notify:
+      - Reload systemd
+      - Restart containerd
   become: true
 
 - name: Update APT package cache
   ansible.builtin.apt:
     update_cache: yes
-    cache_valid_time: 3600  # Example: 1 hour
+    cache_valid_time: 3600
 
-- name: Install specific version of Kubernetes packages (kubeadm, kubelet, kubectl) or use available version
+- name: Install specific version of Kubernetes packages (kubeadm, kubelet, kubectl)
   ansible.builtin.apt:
     name: "{{ item }}=1.29.*"
     state: present
@@ -24,125 +24,86 @@
     - kubeadm
     - kubelet
     - kubectl
-  ignore_errors: yes  # Consider handling errors more gracefully or removing to enforce version requirements
+  ignore_errors: yes
+
+- name: Check if reboot is required
+  stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Reboot the system if required
+  ansible.builtin.reboot:
+    msg: "Rebooting because of significant system changes"
+    connect_timeout: 5
+    reboot_timeout: 300
+    pre_reboot_delay: 0
+    post_reboot_delay: 60
+    test_command: uptime
+  when: reboot_required.stat.exists
 
 
-- name: Join the cluster
-  command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
-  environment:
-    KUBECONFIG: "/etc/kubernetes/admin.conf"
-  when: "'kubeadm_join_command' in hostvars[groups['master'][0]]"
+- name: Print Current Playbook Structure
+  ansible.builtin.debug:
+    var: play_hosts
 
-- name: Ensure Kubernetes packages are installed
-  apt:
-    name:
-      - kubelet
-      - kubeadm
-      - kubectl
-    state: present
-    update_cache: yes
 
-######
-- name: Stop kubelet service
-  ansible.builtin.systemd:
-    name: kubelet
-    state: stopped
-    enabled: no
 
-- name: Remove existing Kubernetes manifests
-  ansible.builtin.file:
-    path: "/etc/kubernetes/manifests/{{ item }}"
-    state: absent
-  loop:
-    - kube-apiserver.yaml
-    - kube-controller-manager.yaml
-    - kube-scheduler.yaml
-    - etcd.yaml
+# - name: Include common setup tasks
+#   include_tasks: "roles/common/tasks/main.yml"
 
-#######
-- name: Enable and start kubelet service
-  ansible.builtin.systemd:
-    name: kubelet
-    enabled: yes
-    state: started
+# - name: Copy systemd service file for containerd
+#   ansible.builtin.template:
+#     src: "roles/common/templates/containerd.service.j2"
+#     dest: /etc/systemd/system/containerd.service
+#   notify:
+#     - Reload systemd
+#     - Restart containerd
+#   become: true
 
-- name: Check kubeadm installation
-  command: which kubeadm
-  register: kubeadm_check
-  failed_when: kubeadm_check.rc != 0
+# - name: Update APT package cache
+#   ansible.builtin.apt:
+#     update_cache: yes
+#     cache_valid_time: 3600
 
-- name: Check kubelet installation
-  command: which kubelet
-  register: kubelet_check
-  failed_when: kubelet_check.rc != 0
+# - name: Install specific version of Kubernetes packages (kubeadm, kubelet, kubectl) or use available version
+#   ansible.builtin.apt:
+#     name: "{{ item }}=1.29.*"
+#     state: present
+#     update_cache: yes
+#   loop:
+#     - kubeadm
+#     - kubelet
+#     - kubectl
+#   ignore_errors: yes
 
-- name: Check kubectl installation
-  command: which kubectl
-  register: kubectl_check
-  failed_when: kubectl_check.rc != 0
+# - name: Ensure Kubernetes packages are installed
+#   apt:
+#     name:
+#       - kubelet
+#       - kubeadm
+#       - kubectl
+#     state: present
+#     update_cache: yes
 
-- name: Debug kubeadm installation check
-  debug:
-    msg: "kubeadm installed at: {{ kubeadm_check.stdout }}"
-  when: kubeadm_check.rc == 0
+# - name: Check if reboot is required
+#   stat:
+#     path: /var/run/reboot-required
+#   register: reboot_required
 
-- name: Debug kubelet installation check
-  debug:
-    msg: "kubelet installed at: {{ kubelet_check.stdout }}"
-  when: kubelet_check.rc == 0
+# - name: Reboot the system if required
+#   ansible.builtin.reboot:
+#     msg: "Rebooting because of significant system changes"
+#     connect_timeout: 5
+#     reboot_timeout: 300
+#     pre_reboot_delay: 0
+#     post_reboot_delay: 60
+#     test_command: uptime
+#   when: reboot_required.stat.exists
 
-- name: Debug kubectl installation check
-  debug:
-    msg: "kubectl installed at: {{ kubectl_check.stdout }}"
-  when: kubectl_check.rc == 0
 
-- name: Initialize the Kubernetes cluster
-  command: kubeadm init --pod-network-cidr=192.168.0.0/16
-  register: kubeadm_init_output
 
-###
-- name: Ensure Kubernetes required ports are available
-  block:
-    - name: Check for process using Kubernetes ports
-      ansible.builtin.shell: "ss -ltnp | grep -E ':10250|:10259|:2379|:2380' | awk '{print $6}' | cut -d',' -f1 | awk -F'\"' '{print $2}'"
-      register: processes_using_ports
-      ignore_errors: true
-      changed_when: false
 
-    - name: Kill processes using Kubernetes ports
-      ansible.builtin.shell: "kill -9 $(pidof {{ item }})"
-      loop: "{{ processes_using_ports.stdout_lines }}"
-      when: processes_using_ports.stdout != ""
-      ignore_errors: true
 
-###
 
-- name: Save kubeadm init output as a fact
-  ansible.builtin.set_fact:
-    kubeadm_join_command: "{{ kubeadm_init_output.stdout_lines | select('match', '^kubeadm join.*$') | first }}"
 
-- name: Create .kube directory
-  file:
-    path: "/home/ubuntu/.kube"
-    state: directory
-    owner: ubuntu
-    group: ubuntu
-    mode: '0755'
 
-- name: Copy admin.conf to user's kube config
-  copy:
-    src: "/etc/kubernetes/admin.conf"
-    dest: "/home/ubuntu/.kube/config"
-    remote_src: yes
-    owner: ubuntu
-    group: ubuntu
-    mode: '0644'
-
-- name: Apply Calico network plugin
-  command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
-  environment:
-    KUBECONFIG: "/etc/kubernetes/admin.conf"
-  register: result
-  until: result.rc == 0
-  retries: 5
-  delay: 30

@@ -20,7 +20,7 @@ module "vpc" {
 module "master_node" {
   source                = "./modules/ec2-master"
   ami                   = "ami-0fb99f22ad0184043"
-  instance_type         = "t2.medium"
+  instance_type         = "m5.xlarge"
   subnet_id             = module.vpc.public_subnet_ids[0]
   security_group_ids    = [module.vpc.master_security_group_id]
   key_name              = "pro1"
@@ -32,7 +32,7 @@ module "master_node" {
 module "worker_nodes" {
   source                = "./modules/ec2-worker"
   ami                   = "ami-0fb99f22ad0184043"
-  instance_type         = "t2.medium"
+  instance_type         = "t3.medium"
   subnet_id             = module.vpc.public_subnet_ids[0]
   security_group_ids    = [module.vpc.worker_security_group_id]
   key_name              = "pro1"
@@ -59,11 +59,12 @@ resource "null_resource" "configure_k8s" {
     module.master_node,
     module.worker_nodes,
     module.vpc,
-    // Include here any other resources or modules your Ansible configuration depends on.
-    // For example, if you have a module for your VPC or NAT Gateway, include them as well:
 
-    // module.nat_gateway,
   ]
+  // First provisioner to introduce delay
+  provisioner "local-exec" {
+    command = "sleep 60"
+  }
 
   provisioner "local-exec" {
     command = "ansible-playbook -i ${path.module}/../ansible/hosts.ini ${path.module}/../ansible/k8s-setup.yml --private-key ${path.module}/pro1.pem"
@@ -73,28 +74,3 @@ resource "null_resource" "configure_k8s" {
   }
 }
 
-
-
-# # Removed: data "template_file" "ansible_hosts"
-# # This data source is replaced by the use of the templatefile function directly in the local_file resource.
-
-# resource "local_file" "ansible_inventory" {
-#   # Updated to use templatefile function directly for content generation
-#   content = templatefile("${path.module}/hosts.tpl", {
-#     master_ips       = module.master_node.master_node_ip, # Assuming this outputs a single IP
-#     worker_ips       = module.worker_nodes.worker_node_ips, # Directly pass the list without joining it into a string
-#     private_key_path = "${path.module}/pro1.pem"
-#   })
-#   filename = "${path.module}/../ansible/hosts.ini"
-# }
-
-# resource "null_resource" "configure_k8s" {
-#   depends_on = [local_file.ansible_inventory]
-
-#   provisioner "local-exec" {
-#     command = "ansible-playbook -i ${path.module}/../ansible/hosts.ini ${path.module}/../ansible/k8s-setup.yml --private-key ${path.module}/pro1.pem"
-#     environment = {
-#       ANSIBLE_HOST_KEY_CHECKING = "False"
-#     }
-#   }
-# }

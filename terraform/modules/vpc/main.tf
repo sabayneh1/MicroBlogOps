@@ -74,10 +74,6 @@ resource "aws_subnet" "private" {
   }
 }
 
-
-# Security Groups for Linux and Windows (previously defined)
-# (Please include the previously provided "aws_security_group" "linux_security_group" and "aws_security_group" "windows_security_group" here.)
-
 # Master Node Security Group
 resource "aws_security_group" "master" {
   name        = "k8s-master"
@@ -97,29 +93,26 @@ resource "aws_security_group" "master" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   ingress {
-  from_port   = 80
-  to_port     = 80
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-  from_port   = 443
-  to_port     = 443
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = -1
-    to_port     = -1
-    protocol    = "icmp"
+    from_port   = 2379
+    to_port     = 2380
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    self        = true
+    from_port   = 10251
+    to_port     = 10251
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 10252
+    to_port     = 10252
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -142,35 +135,19 @@ resource "aws_security_group" "worker" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   ingress {
-    from_port   = 6443
-    to_port     = 6443
+    from_port   = 10250
+    to_port     = 10250
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   ingress {
-  from_port   = 80
-  to_port     = 80
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-  from_port   = 443
-  to_port     = 443
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = -1
-    to_port     = -1
-    protocol    = "icmp"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    self        = true
   }
 
   egress {
@@ -180,4 +157,3 @@ resource "aws_security_group" "worker" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-

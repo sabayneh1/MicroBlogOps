@@ -1,0 +1,34 @@
+- name: Ensure UFW is installed
+  ansible.builtin.package:
+    name: ufw
+    state: present
+
+- name: Enable UFW
+  ansible.builtin.ufw:
+    state: enabled
+    policy: allow
+    direction: incoming
+
+- name: Allow Kubernetes API server port
+  ansible.builtin.ufw:
+    rule: allow
+    port: '6443'
+    proto: tcp
+
+- name: Allow etcd server client API ports
+  ansible.builtin.ufw:
+    rule: allow
+    port: '2379:2380'
+    proto: tcp
+
+- name: Allow Kubelet API port
+  ansible.builtin.ufw:
+    rule: allow
+    port: '10250'
+    proto: tcp
+
+- name: Allow NodePort Services range
+  ansible.builtin.ufw:
+    rule: allow
+    port: '30000:32767'
+    proto: tcp
