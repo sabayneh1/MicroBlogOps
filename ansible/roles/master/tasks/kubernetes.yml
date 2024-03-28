@@ -1,3 +1,4 @@
+#ansible/roles/master/tasks/kubernetes.yml
 - name: Reset Kubernetes cluster to ensure a clean state
   ansible.builtin.shell: yes | kubeadm reset --force
   become: true
@@ -17,11 +18,18 @@
     state: started
     enabled: true
 
+
+
 - name: Save kubeadm init output as a fact
   ansible.builtin.set_fact:
     kubeadm_join_command: "{{ kubeadm_init_output.stdout_lines | select('match', '^kubeadm join.*$') | first }}"
 
-# ... (User Configuration Tasks)
+
+- name: Print kubeadm_join_command after initialization
+  ansible.builtin.debug:
+    var: kubeadm_join_command
+
+
 
 - name: Download Calico Network Manifest
   ansible.builtin.get_url:
@@ -38,63 +46,35 @@
   retries: 5
   delay: 30
 
+- name: Configure kubeconfig for ubuntu user
+  become: true
+  block:
+    - name: Ensure ubuntu's .kube directory exists
+      ansible.builtin.file:
+        path: "/home/ubuntu/.kube"
+        state: directory
+        owner: "ubuntu"
+        group: "ubuntu"
+        mode: '0755'
 
+    - name: Find the CA certificate path (if needed)
+      ansible.builtin.stat:
+        path: /etc/kubernetes/pki/ca.crt
+      register: ca_certificate_stat
 
+    - name: Configure kubeconfig
+      ansible.builtin.shell:
+        cmd: |
+          kubectl config set-cluster kubernetes-the-hard-way \
+             --certificate-authority={{ ca_certificate_stat.stat.path }} \
+             --embed-certs=true \
+             --server=https://{{ hostvars['master']['ansible_host'] }}:6443 \
+             --kubeconfig=/home/ubuntu/.kube/config
 
+          # ... (Add commands for client credentials if needed)
 
-
-
-
-# - name: Reset Kubernetes cluster to ensure a clean state
-#   ansible.builtin.shell:
-#     cmd: yes | kubeadm reset --force
-#   args:
-#     executable: /bin/bash
-#   ignore_errors: yes
-#   become: true
-#   changed_when: false
-
-# - name: Initialize the Kubernetes cluster with preflight errors ignored
-#   ansible.builtin.command:
-#     cmd: kubeadm init --pod-network-cidr=192.168.0.0/16 --ignore-preflight-errors=all --v=5
-#   register: kubeadm_init_output
-#   failed_when: kubeadm_init_output.rc != 0 and ('preflight' not in kubeadm_init_output.stderr)
-#   become: true
-
-# - name: Ensure kubelet is enabled and started
-#   ansible.builtin.systemd:
-#     name: kubelet
-#     state: started
-#     enabled: true
-
-# - name: Save kubeadm init output as a fact
-#   ansible.builtin.set_fact:
-#     kubeadm_join_command: "{{ kubeadm_init_output.stdout_lines | select('match', '^kubeadm join.*$') | first }}"
-
-# - name: Create .kube directory
-#   file:
-#     path: "/home/ubuntu/.kube"
-#     state: directory
-#     owner: ubuntu
-#     group: ubuntu
-#     mode: "0755"
-
-# - name: Copy admin.conf to user's kube config
-#   copy:
-#     src: "/etc/kubernetes/admin.conf"
-#     dest: "/home/ubuntu/.kube/config"
-#     remote_src: yes
-#     owner: ubuntu
-#     group: ubuntu
-#     mode: "0644"
-
-# - name: Apply Calico network plugin
-#   ansible.builtin.shell: |
-#     kubectl apply -f 'https://docs.projectcalico.org/manifests/calico.yaml'
-#   environment:
-#     KUBECONFIG: "/etc/kubernetes/admin.conf"
-#   register: result
-#   until: result.rc == 0
-#   retries: 5
-#   delay: 30
-
+          kubectl config set-context ubuntu-cluster \
+             --cluster=kubernetes-the-hard-way \
+             --user=ubuntu \
+             --namespace=default \
+             --kubeconfig=/home/ubuntu/.kube/config

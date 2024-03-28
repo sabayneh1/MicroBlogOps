@@ -12,15 +12,12 @@
 - name: Include Kubernetes setup tasks
   include_tasks: "roles/common/tasks/kubernetes.yml"
 
-- name: Include firewall setup tasks
-  include_tasks: "roles/common/tasks/firewall.yml"
-
-
 - name: Disable swap and remove from /etc/fstab
   block:
     - name: Disable swap
       command: swapoff -a
       ignore_errors: yes
+
     - name: Remove swap from /etc/fstab
       ansible.builtin.lineinfile:
         path: /etc/fstab
@@ -28,15 +25,15 @@
         line: "# Commented out by Ansible"
         state: absent
 
-- name: Ensure no conflicting Docker packages are installed
-  ansible.builtin.package:
-    name: "{{ item }}"
-    state: absent
-  loop:
-    - docker
-    - docker-engine
-    - docker.io
-    - runc
+# - name: Ensure no conflicting Docker packages are installed
+#   ansible.builtin.package:
+#     name: "{{ item }}"
+#     state: absent
+#   loop:
+#     - docker
+#     - docker-engine
+#     - docker.io
+#     - runc
 
 - name: Update and upgrade all packages
   ansible.builtin.apt:

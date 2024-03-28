@@ -63,7 +63,7 @@ resource "null_resource" "configure_k8s" {
   ]
   // First provisioner to introduce delay
   provisioner "local-exec" {
-    command = "sleep 60"
+    command = "sleep 120"
   }
 
   provisioner "local-exec" {

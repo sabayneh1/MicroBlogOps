@@ -1,19 +1,29 @@
+#ansible/roles/workers/tasks/main.yml
+
 - name: Include common setup tasks
   include_tasks: "roles/common/tasks/main.yml"
+
+- name: Print Inventory Data
+  ansible.builtin.debug:
+    var: groups
 
 - name: Copy systemd service file for containerd
   ansible.builtin.template:
     src: "roles/common/templates/containerd.service.j2"
     dest: /etc/systemd/system/containerd.service
-
-  notify:
-    - Reload systemd
-    - Restart containerd
-
   become: true
 
-# - name: Join the cluster
-#   command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
-#   environment:
-#     KUBECONFIG: "/etc/kubernetes/admin.conf"
-#   when: "'kubeadm_join_command' in hostvars[groups['master'][0]]"
+- name: Join workers to the Kubernetes cluster
+  loop: "{{ groups['workers'] }}"
+  loop_control:
+    loop_var: worker_host
+  command: >-
+    kubeadm join {{ hostvars[worker_host]['ansible_host'] }}:6443 --token
+    "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] | regex_search(' --token (.+?) ') | last }}"
+    "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] | regex_search('(?<=\\s).*') }}"
+  when: hostvars[groups['master'][0]].kubeadm_join_command is defined
+
+- name: Print the join command
+  ansible.builtin.debug:
+    var: hostvars[groups['master'][0]]['kubeadm_join_command']
+

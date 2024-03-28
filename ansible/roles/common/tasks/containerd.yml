@@ -1,0 +1,31 @@
+- name: Download and install containerd 1.7.14
+  block:
+    - name: Download containerd package
+      ansible.builtin.get_url:
+        url: "https://github.com/containerd/containerd/releases/download/v1.7.14/containerd-1.7.14-linux-amd64.tar.gz"
+        dest: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+        mode: '0644'
+      become: true
+
+    - name: Create containerd directory
+      ansible.builtin.file:
+        path: "/usr/local/bin"
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Extract containerd package
+      ansible.builtin.unarchive:
+        src: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+        dest: "/usr/local/bin"
+        remote_src: yes
+        extra_opts: ["--strip-components=1"]
+      become: true
+
+    - name: Remove the downloaded tarball
+      ansible.builtin.file:
+        path: "/tmp/containerd-1.7.14-linux-amd64.tar.gz"
+        state: absent
+      become: true
+  notify: Restart containerd
+  become: true

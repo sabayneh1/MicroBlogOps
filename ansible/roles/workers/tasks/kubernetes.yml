@@ -1,8 +1,8 @@
-- name: Join the cluster
-  command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
-  environment:
-    KUBECONFIG: "/etc/kubernetes/admin.conf"
-  when: "'kubeadm_join_command' in hostvars[groups['master'][0]]"
+# - name: Join the cluster
+#   command: "{{ hostvars[groups['master'][0]]['kubeadm_join_command'] }}"
+#   environment:
+#     KUBECONFIG: "/etc/kubernetes/admin.conf"
+#   when: "'kubeadm_join_command' in hostvars[groups['master'][0]]"
 
 
 # - name: Join the Kubernetes cluster
