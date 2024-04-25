@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: CloudWatch
+      type: cloudwatch
+      jsonData:
+        authType: default
+        defaultRegion: ca-central-1
+        assumeRoleArn: "arn:aws:iam::247867391235:role/GrafanaRoleForEKS"

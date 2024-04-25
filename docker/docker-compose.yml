@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: "New1234@yes"
+      MYSQL_DATABASE: ghost
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./grant-permissions.sql:/docker-entrypoint-initdb.d/grant-permissions.sql
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  ghost:
+    image: ghost:3-alpine
+    ports:
+      - "8080:2368"
+    environment:
+      url: http://aa32ae9dbc82a413dab124a0599a4a5c-1264531846.ca-central-1.elb.amazonaws.com
+      database__client: mysql
+      database__connection__host: mysql
+      database__connection__user: root
+      database__connection__password: "New1234@yes"
+      database__connection__database: ghost
+    volumes:
+      - ghost-data:/var/lib/ghost/content
+    depends_on:
+      - mysql
+
+volumes:
+  mysql-data:
+  ghost-data:

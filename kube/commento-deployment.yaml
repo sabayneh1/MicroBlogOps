@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: commento
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: commento
+  template:
+    metadata:
+      labels:
+        app: commento
+    spec:
+      containers:
+      - name: commento
+        image: sabayneh/my-custom-commento:v3
+        ports:
+        - containerPort: 8080  # Ensure this is the port Commento is configured to use
+        env:
+        - name: COMMENTO_ORIGIN
+          value: "http://aa32ae9dbc82a413dab124a0599a4a5c-1264531846.ca-central-1.elb.amazonaws.com"
+        - name: COMMENTO_POSTGRES
+          value: "postgres://commento:UG9zdEdyaWwyMzQ1NzY5MDIy@postgres-commento:5432/commento?sslmode=disable"
+        - name: COMMENTO_BIND_ADDRESS
+          value: "0.0.0.0"  # Listening on all interfaces
+        - name: COMMENTO_PORT
+          value: "8080"  # Specify the port to match the containerPort
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"

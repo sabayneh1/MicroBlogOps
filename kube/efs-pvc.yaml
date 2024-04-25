@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-pvc
+  namespace: monitoring  # Change this as needed, e.g., to a specific application namespace
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 5Gi  # EFS doesn't enforce this, but Kubernetes requires a value

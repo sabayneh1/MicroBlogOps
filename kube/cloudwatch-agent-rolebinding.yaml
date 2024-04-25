@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cloudwatch-agent-rolebinding
+  namespace: amazon-cloudwatch
+subjects:
+- kind: ServiceAccount
+  name: cloudwatch-agent
+  namespace: amazon-cloudwatch
+roleRef:
+  kind: Role
+  name: cloudwatch-agent-role
+  apiGroup: rbac.authorization.k8s.io

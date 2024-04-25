@@ -1,0 +1,31 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - yum update -y && yum install -y unzip
+      - curl -o terraform.zip https://releases.hashicorp.com/terraform/1.0.0/terraform_1.0.0_linux_amd64.zip
+      - unzip terraform.zip
+      - mv terraform /usr/local/bin/
+      - terraform version
+  pre_build:
+    commands:
+      - terraform init
+      - terraform validate
+  build:
+    commands:
+      - ls
+      - pwd
+      - cd eks-terraform
+      - ls
+      - pwd
+      # - terraform init -backend-config="bucket=my-terraform-state-bucket-blogplatform-22" -backend-config="key=state/terraform.tfstate" -backend-config="region=ca-central-1" -backend-config="dynamodb_table=my-terraform-state-lock-blogplatform-22"
+      - terraform init -reconfigure
+      # - export TF_LOG=DEBUG
+      - terraform plan -out=tfplan
+      - terraform apply -auto-approve tfplan
+artifacts:
+  files:
+    - '**/*'

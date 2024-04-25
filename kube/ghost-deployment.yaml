@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghost
+spec:
+  selector:
+    matchLabels:
+      app: ghost
+  template:
+    metadata:
+      labels:
+        app: ghost
+    spec:
+      serviceAccountName: ghost-service-account
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - node1
+
+
+      containers:
+      - name: ghost
+        image: sabayneh/my-custom-ghost:v2
+        env:
+        - name: database__connection__host
+          value: mysql
+        - name: url
+          value: "http://aa32ae9dbc82a413dab124a0599a4a5c-1264531846.ca-central-1.elb.amazonaws.com"
+        - name: commento__url
+          value: "http://aa32ae9dbc82a413dab124a0599a4a5c-1264531846.ca-central-1.elb.amazonaws.com/commento"
+        ports:
+        - containerPort: 2368
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+          limits:
+            cpu: "200m"
+            memory: "200Mi"

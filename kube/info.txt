@@ -1,0 +1,3 @@
+grafan
+username: admin
+password: yourStrongPassword

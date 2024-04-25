@@ -1,0 +1,66 @@
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: postgres-commento
+# spec:
+#   selector:
+#     matchLabels:
+#       app: postgres-commento
+#   template:
+#     metadata:
+#       labels:
+#         app: postgres-commento
+#     spec:
+#       containers:
+#       - name: postgres
+#         image: sabayneh/my-custom-commento-postgress:v1
+#         env:
+#           - name: POSTGRES_DB
+#             value: commento
+#           - name: POSTGRES_USER
+#             value: commento
+#           - name: POSTGRES_PASSWORD
+#             valueFrom:
+#               secretKeyRef:
+#                 name: postgres-commento-secret
+#                 key: password
+#         ports:
+#         - containerPort: 5432
+#         resources:
+#           requests:
+#             memory: "256Mi"
+#             cpu: "250m"
+#           limits:
+#             memory: "512Mi"
+#             cpu: "500m"
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-commento
+spec:
+  selector:
+    matchLabels:
+      app: postgres-commento
+  template:
+    metadata:
+      labels:
+        app: postgres-commento
+    spec:
+      containers:
+      - name: postgres
+        image: sabayneh/my-custom-commento-postgress:v1
+        env:
+          - name: POSTGRES_DB
+            value: commento
+          - name: POSTGRES_USER
+            value: commento
+        ports:
+        - containerPort: 5432
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

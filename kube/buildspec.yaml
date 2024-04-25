@@ -1,0 +1,29 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon EKS...
+      - aws eks --region $AWS_DEFAULT_REGION update-kubeconfig --name TestOne
+      - kubectl config view
+      - kubectl get nodes
+      - kubectl get svc
+  build:
+    commands:
+      - echo Deploying to EKS...
+      - ls
+      - pwd
+      - cd kube
+      - kubectl describe pods || true
+      - kubectl apply -f mysql-pvc.yaml || true
+      - sleep 30
+      - kubectl apply -f mysql-deployment.yaml || true
+      - sleep 30
+      - kubectl apply -f ghost-deployment.yaml || true
+      - sleep 30
+      - kubectl apply -f hpa-ghost.yaml || true
+      - kubectl apply -f hpa-mysql.yaml || true
+      - kubectl apply -f ghost-service.yaml || true
+  post_build:
+    commands:
+      - echo Deployment completed on `date`

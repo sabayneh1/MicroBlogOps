@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-server
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-server
+  template:
+    metadata:
+      labels:
+        app: prometheus-server
+    spec:
+      serviceAccountName: prometheus  # Add this line to specify the service account
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.26.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+          ports:
+            - containerPort: 9090
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus
+            - name: prometheus-config   # Add this volume mount for the modified prometheus.yml
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml   # Ensure the modified prometheus.yml is used
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: prometheus-config    # Add this volume for the modified prometheus.yml
+          configMap:
+            name: prometheus-modified-config   # Replace with the actual name of your modified ConfigMap
