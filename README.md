@@ -3,9 +3,9 @@
 This repository is designed for deploying a commenting application using Kubernetes on AWS EC2 instances. The application utilizes Docker containers, managed through Kubernetes, with infrastructure as code handled by Terraform and Ansible.
 
 # Diagram 
+![mindmap](https://github.com/sabayneh1/MicroBlogOps/assets/59586300/6d7dc495-c2de-4e99-8c87-59d616de816c)
 
 ## Repository Structure
-![mindmap](https://github.com/sabayneh1/MicroBlogOps/assets/59586300/d682d6b7-efbe-4c75-af6d-d2849bde51a3)
 
 - **docker/** - Houses the Dockerfiles for building the application's images.
 - **eks-terraform/** - Terraform scripts to establish an EKS cluster.
