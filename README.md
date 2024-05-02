@@ -4,11 +4,10 @@ This repository is designed for deploying a commenting application using Kuberne
 
 ## Repository Structure
 
-- **ansible/** - Contains playbooks and roles for setting up the Kubernetes cluster.
 - **docker/** - Houses the Dockerfiles for building the application's images.
 - **eks-terraform/** - Terraform scripts to establish an EKS cluster.
 - **kube/** - Kubernetes configuration files for the application deployment.
-- **terraform/** - Scripts for provisioning infrastructure on AWS, such as EC2 instances.
+- **terraform/** - Scripts for provisioning infrastructure on AWS, such as EC2 instances and it Contains playbooks and roles for setting up the Kubernetes cluster.
 
 ## Features in `kube/` Directory
 
